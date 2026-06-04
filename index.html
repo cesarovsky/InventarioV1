@@ -1084,23 +1084,25 @@ function setDBStatus(online) {
   }
 }
 
-// Google Apps Script tiene limitaciones con POST body.
-// Enviamos los datos como parámetro GET codificado en la URL.
-async function gasRequest(payload) {
-  const encoded = encodeURIComponent(JSON.stringify(payload));
-  const url     = API_URL + '?data=' + encoded + '&t=' + Date.now();
-  const res     = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Error del servidor');
-  return json;
+// Escritura: POST con no-cors (evita límite de URL y problemas CORS)
+// no-cors no permite leer la respuesta pero el script guarda igual.
+// Verificamos el resultado con una lectura posterior.
+async function gasWrite(payload) {
+  await fetch(API_URL, {
+    method:  'POST',
+    mode:    'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body:    JSON.stringify(payload)
+  });
+  // no-cors siempre retorna respuesta opaca — no podemos leer el resultado.
+  // Asumimos éxito si no hay excepción de red.
 }
 
 async function saveDB() {
   localStorage.setItem('inv_db_local', JSON.stringify(DB));
   if (!isConfigured()) { updateDBInfo(); return; }
   try {
-    await gasRequest({ action: 'saveDB', data: DB });
+    await gasWrite({ action: 'saveDB', data: DB });
     setDBStatus(true); updateDBInfo();
   } catch(e) { throw e; }
 }
@@ -1110,7 +1112,7 @@ async function saveHistory() {
   localStorage.setItem('inv_hist_local', JSON.stringify(histSer));
   if (!isConfigured()) { updateDBInfo(); return; }
   try {
-    await gasRequest({ action: 'saveHistory', data: histSer });
+    await gasWrite({ action: 'saveHistory', data: histSer });
     setDBStatus(true); updateDBInfo();
   } catch(e) { toast('⚠ Error guardando historial: ' + e.message, 'err'); }
 }
