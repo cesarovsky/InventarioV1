@@ -1,0 +1,2258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión de Inventario</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #00e5ff;
+    --accent2: #ff4757;
+    --accent3: #2ed573;
+    --accent4: #ffa502;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-muted: #334155;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+    --radius: 8px;
+    --glow: 0 0 20px rgba(0,229,255,0.15);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--text-dim); }
+
+  .alert-badge {
+    background: var(--accent2);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    animation: pulse-badge 2s infinite;
+  }
+  @keyframes pulse-badge {
+    0%,100% { box-shadow: 0 0 0 0 rgba(255,71,87,0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(255,71,87,0); }
+  }
+  .alert-badge:hover { background: #ff6b7a; }
+
+  /* ── Nav tabs ── */
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    padding: 0 24px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Main layout ── */
+  main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Section heading ── */
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .section-head h2 {
+    font-family: var(--sans);
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text);
+  }
+  .section-head .sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Search bar ── */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px 12px 42px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-wrap input:focus {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+  .search-wrap .icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    font-size: 16px;
+  }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    z-index: 200;
+    max-height: 280px;
+    overflow-y: auto;
+    box-shadow: var(--glow);
+  }
+  .autocomplete-list div {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .autocomplete-list div:hover { background: var(--border); }
+  .autocomplete-list div .match { color: var(--accent); }
+  .autocomplete-list div .detail { color: var(--text-dim); font-size: 11px; }
+
+  /* ── Product info card ── */
+  .product-card {
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--glow);
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+  .product-card .code {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .product-card .desc {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .product-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .meta-item .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .meta-item .value {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .meta-item .value.qty-ok { color: var(--accent3); }
+  .meta-item .value.qty-low { color: var(--accent4); }
+  .meta-item .value.qty-zero { color: var(--accent2); }
+
+  /* ── Transaction fields ── */
+  .tx-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .tx-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tx-field-group label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .tx-field-group.ingreso label { color: var(--accent3); }
+  .tx-field-group.egreso label { color: var(--accent2); }
+  .tx-field-group input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .tx-field-group.ingreso input:focus { border-color: var(--accent3); }
+  .tx-field-group.egreso input:focus { border-color: var(--accent2); }
+
+  /* ── Qty input area ── */
+  .qty-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .qty-box {
+    flex: 1;
+    min-width: 140px;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+  }
+  .qty-box .box-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .qty-box.ingreso .box-label { color: var(--accent3); }
+  .qty-box.egreso .box-label { color: var(--accent2); }
+  .qty-box input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 20px;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .qty-box.ingreso input:focus { border-color: var(--accent3); }
+  .qty-box.egreso input:focus { border-color: var(--accent2); }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 11px 22px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    font-weight: 700;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #33eaff; box-shadow: var(--glow); }
+  .btn-ingreso {
+    background: var(--accent3);
+    color: #000;
+    flex: 1;
+  }
+  .btn-ingreso:hover { background: #3dfa87; box-shadow: 0 0 20px rgba(46,213,115,0.3); }
+  .btn-egreso {
+    background: var(--accent2);
+    color: #fff;
+    flex: 1;
+  }
+  .btn-egreso:hover { background: #ff6b7a; box-shadow: 0 0 20px rgba(255,71,87,0.3); }
+  .btn-export {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .btn-export:hover { background: rgba(0,229,255,0.08); }
+  .btn-danger {
+    background: transparent;
+    color: var(--accent2);
+    border: 1px solid var(--accent2);
+  }
+  .btn-danger:hover { background: rgba(255,71,87,0.1); }
+
+  .action-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Table ── */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  th {
+    background: var(--surface2);
+    padding: 11px 14px;
+    text-align: left;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    font-size: 10px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  th:hover { color: var(--text); }
+  th.sort-asc::after { content: ' ▲'; color: var(--accent); }
+  th.sort-desc::after { content: ' ▼'; color: var(--accent); }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .qty-cell { font-weight: 700; }
+  .qty-ok { color: var(--accent3); }
+  .qty-low { color: var(--accent4); }
+  .qty-zero { color: var(--accent2); }
+  .code-cell { color: var(--accent); font-size: 11px; }
+  .mpn-cell { color: var(--text-dim); font-size: 11px; }
+
+  /* ── History ── */
+  .hist-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    animation: slideIn 0.3s ease;
+    flex-wrap: wrap;
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+  .hist-item:last-child { border-bottom: none; }
+  .hist-badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    min-width: 60px;
+    text-align: center;
+  }
+  .hist-badge.ing { background: rgba(46,213,115,0.15); color: var(--accent3); }
+  .hist-badge.egr { background: rgba(255,71,87,0.15); color: var(--accent2); }
+  .hist-code { color: var(--accent); flex: 1; min-width: 160px; }
+  .hist-qty { font-weight: 700; min-width: 50px; text-align: right; }
+  .hist-qty.ing { color: var(--accent3); }
+  .hist-qty.egr { color: var(--accent2); }
+  .hist-ref { color: var(--accent4); font-size: 11px; min-width: 120px; }
+  .hist-time { color: var(--text-dim); font-size: 11px; min-width: 130px; text-align: right; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-card .stat-val {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .stat-card .stat-lbl {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── Alert panel ── */
+  .alert-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .alert-dot.zero { background: var(--accent2); }
+  .alert-dot.low { background: var(--accent4); }
+  .alert-info { flex: 1; min-width: 0; }
+  .alert-code { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  .alert-desc { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alert-qty { font-family: var(--mono); font-weight: 700; font-size: 15px; }
+  .alert-qty.zero { color: var(--accent2); }
+  .alert-qty.low { color: var(--accent4); }
+
+  /* ── Filters ── */
+  .filter-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .filter-row select, .filter-row input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+  }
+  .filter-row select:focus, .filter-row input:focus {
+    border-color: var(--accent);
+  }
+  .filter-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  .filter-row .ml-auto { margin-left: auto; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    z-index: 1000;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    max-width: 340px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.ok { border-color: var(--accent3); }
+  #toast.err { border-color: var(--accent2); }
+  .toast-icon { font-size: 16px; }
+
+  /* ── Min stock editor ── */
+  .min-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    width: 60px;
+    outline: none;
+    text-align: center;
+  }
+  .min-input:focus { border-color: var(--accent4); }
+
+  /* ── Pagination ── */
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .page-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .page-btn:hover, .page-btn.active { background: var(--border); color: var(--accent); border-color: var(--accent); }
+  .page-btn:disabled { opacity: 0.3; cursor: default; }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center;
+    padding: 48px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .empty .big { font-size: 32px; margin-bottom: 12px; }
+
+  /* ── DB info bar ── */
+  .db-bar {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .db-bar .db-stat { color: var(--accent); font-weight: 700; }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,229,255,0.03);
+  }
+  .upload-zone .up-icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-zone p { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  .upload-zone strong { color: var(--accent); }
+
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .pdf-item-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .pdf-item-row.matched { border-color: rgba(255,71,87,0.4); }
+  .pdf-item-row.unmatched { border-color: rgba(255,165,0,0.4); }
+  .pdf-item-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .pdf-match-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .pdf-match-badge.ok { background: rgba(255,71,87,0.15); color: var(--accent2); }
+  .pdf-match-badge.warn { background: rgba(255,165,0,0.15); color: var(--accent4); }
+  .pdf-item-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 10px; }
+  .pdf-field { display: flex; flex-direction: column; gap: 3px; }
+  .pdf-field label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; }
+  .pdf-field input, .pdf-field select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+  }
+  .pdf-field input:focus, .pdf-field select:focus { border-color: var(--accent2); }
+
+  scrollbar-width: thin;
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Banner configuración Google Sheets ── -->
+<div id="setup-banner" style="display:none;background:#1a0a00;border-bottom:2px solid var(--accent4);padding:12px 24px;font-family:var(--mono);font-size:12px;color:var(--accent4);align-items:center;gap:16px;flex-wrap:wrap;">
+  <span>⚠ BASE DE DATOS NO CONFIGURADA — Los datos se guardan solo localmente.</span>
+  <button onclick="openSetup()" style="background:var(--accent4);color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px">⚙ CONFIGURAR</button>
+</div>
+
+<!-- ── Modal configuración ── -->
+<div id="setup-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--accent4);border-radius:12px;padding:32px;max-width:520px;width:90%;font-family:var(--mono);">
+    <div style="font-size:15px;color:var(--accent4);font-weight:700;margin-bottom:8px">⚙ CONECTAR CON GOOGLE SHEETS</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:20px;line-height:1.8">
+      1. Ve a <a href="https://script.google.com" target="_blank" style="color:var(--accent)">script.google.com</a> → Nuevo proyecto<br>
+      2. Borra el contenido y pega el código del archivo <code style="color:var(--accent3)">codigo_apps_script.gs</code><br>
+      3. Clic en <strong style="color:var(--text)">Implementar → Nueva implementación</strong><br>
+      4. Tipo: <strong style="color:var(--text)">Aplicación web</strong> · Acceso: <strong style="color:var(--text)">Cualquier usuario</strong><br>
+      5. Copia la <strong style="color:var(--text)">URL de implementación</strong> y pégala abajo
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px">URL DE GOOGLE APPS SCRIPT</div>
+      <input id="cfg-api-url" placeholder="https://script.google.com/macros/s/AKfy.../exec" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:8px 12px;border-radius:6px;outline:none;box-sizing:border-box">
+    </div>
+    <div id="cfg-test-msg" style="font-size:11px;margin-top:10px;min-height:18px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button onclick="testAndSaveConfig()" style="flex:1;background:var(--accent);color:#000;border:none;padding:10px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:700">✓ GUARDAR Y CONECTAR</button>
+      <button onclick="closeSetup()" style="background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);padding:10px 16px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:11px">Cancelar</button>
+    </div>
+    <div style="font-size:10px;color:var(--text-dim);margin-top:14px">La URL se guarda en este navegador. Cada usuario la configura una sola vez.</div>
+  </div>
+</div>
+<!-- ── Modal de configuración ── -->
+<div id="setup-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--accent4);border-radius:12px;padding:32px;max-width:500px;width:90%;font-family:var(--mono);">
+    <div style="font-size:15px;color:var(--accent4);font-weight:700;margin-bottom:8px">⚙ CONFIGURAR BASE DE DATOS COMPARTIDA</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:20px;line-height:1.7">
+      1. Ve a <a href="https://jsonbin.io" target="_blank" style="color:var(--accent)">jsonbin.io</a> → crea una cuenta gratis<br>
+      2. En el dashboard, crea un nuevo Bin con contenido <code style="color:var(--accent3)">{}</code><br>
+      3. Copia el <strong style="color:var(--text)">BIN ID</strong> (formato: <code>64abc123...</code>)<br>
+      4. Ve a Account → API Keys → copia tu <strong style="color:var(--text)">Master Key</strong><br>
+      5. Pega ambos valores abajo y haz clic en Guardar
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px">BIN ID — Productos</div>
+        <input id="cfg-bin-id" placeholder="64abc123def456..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 12px;border-radius:6px;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;letter-spacing:1px">MASTER KEY</div>
+        <input id="cfg-api-key" type="password" placeholder="$2b$10$..." style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 12px;border-radius:6px;outline:none;box-sizing:border-box">
+      </div>
+    </div>
+    <div id="cfg-test-msg" style="font-size:11px;margin-top:10px;min-height:18px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button onclick="testAndSaveConfig()" style="flex:1;background:var(--accent);color:#000;border:none;padding:10px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:700">✓ GUARDAR Y CONECTAR</button>
+      <button onclick="closeSetup()" style="background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);padding:10px 16px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:11px">Cancelar</button>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:14px">La API Key se guarda solo en este navegador (localStorage). JSONBin ofrece 10,000 peticiones/mes gratis.</div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">⬡ <span>INVENTARIO</span> · GESTIÓN <span style="color:var(--accent3);margin-left:8px">v3.0</span></div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span style="font-family:var(--mono);font-size:11px;color:var(--text-dim)" id="clock"></span>
+    <span id="db-status-dot" title="Estado de base de datos" style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">● LOCAL</span>
+    <button onclick="syncNow()" style="background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:4px;cursor:pointer;letter-spacing:1px" title="Sincronizar datos">⟳ SYNC</button>
+    <button onclick="openSetup()" style="background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:4px;cursor:pointer;letter-spacing:1px" title="Configurar Google Sheets">⚙</button>
+
+    <div class="alert-badge" id="alertBadge" onclick="showTab('alertas')" style="display:none">⚠ <span id="alertCount">0</span> alertas</div>
+  </div>
+</header>
+
+<nav>
+  <button class="tab active" onclick="showTab('movimiento')">📦 Movimiento</button>
+  <button class="tab" onclick="showTab('consulta')">🔍 Consulta</button>
+  <button class="tab" onclick="showTab('historial')">📋 Historial</button>
+  <button class="tab" onclick="showTab('alertas')">⚠ Alertas</button>
+  <button class="tab" onclick="showTab('reportes')">📊 Reportes</button>
+  <button class="tab" onclick="showTab('base-datos')">🗄 Base de Datos</button>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════════════ MOVIMIENTO ═══════════════════════════ -->
+<div id="panel-movimiento" class="panel active">
+  <div class="section-head">
+    <h2>Ingreso / Egreso</h2>
+    <span class="sub">// actualiza stock en tiempo real</span>
+  </div>
+
+  <!-- PDF DELIVERY RECEIPT UPLOAD -->
+  <div class="card" id="pdf-upload-card">
+    <div style="font-family:var(--mono);font-size:11px;color:var(--accent2);letter-spacing:1px;margin-bottom:12px">🧾 IMPORTAR EGRESO DESDE DELIVERY RECEIPT (PDF)</div>
+    <div class="upload-zone" id="pdf-drop-zone" onclick="document.getElementById('pdf-receipt-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handlePdfDrop(event)">
+      <div class="up-icon">📄</div>
+      <p><strong>Haz clic aquí</strong> o arrastra el Delivery Receipt PDF</p>
+      <p style="margin-top:4px;color:var(--text-muted)">Extrae automáticamente: Product Model, Total QTY, Delivery #, Fecha → genera egreso</p>
+    </div>
+    <input type="file" id="pdf-receipt-input" accept=".pdf" style="display:none" onchange="handlePdfReceiptFile(this)">
+
+    <!-- Processing state -->
+    <div id="pdf-processing" style="display:none;text-align:center;padding:20px;font-family:var(--mono);font-size:12px;color:var(--accent)">
+      <div style="font-size:24px;margin-bottom:8px;animation:spin 1s linear infinite">⟳</div>
+      <div id="pdf-processing-msg">Analizando PDF con IA...</div>
+    </div>
+
+    <!-- Preview before confirming -->
+    <div id="pdf-preview" style="display:none">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent4);letter-spacing:1px;margin-bottom:12px;margin-top:4px">⚠ VERIFICA LOS DATOS EXTRAÍDOS ANTES DE CONFIRMAR</div>
+      <div id="pdf-items-list"></div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn btn-egreso" style="flex:1" onclick="confirmPdfEgresos()">✓ Confirmar Egresos</button>
+        <button class="btn btn-danger" onclick="cancelPdfPreview()">✕ Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="search-wrap">
+      <span class="icon">🔍</span>
+      <input type="text" id="mov-search" placeholder="Buscar por CODE o MPN..." autocomplete="off" oninput="movSearch(this.value)" onkeydown="movKeydown(event)">
+      <div class="autocomplete-list" id="mov-autocomplete" style="display:none"></div>
+    </div>
+  </div>
+
+  <div id="mov-product" style="display:none">
+    <div class="product-card" id="mov-pcard">
+      <div class="code" id="mov-code"></div>
+      <div class="desc" id="mov-desc"></div>
+      <div class="product-meta">
+        <div class="meta-item"><div class="label">MPN</div><div class="value" id="mov-mpn"></div></div>
+        <div class="meta-item"><div class="label">Stock Actual</div><div class="value" id="mov-qty"></div></div>
+        <div class="meta-item"><div class="label">Warehouse</div><div class="value" id="mov-wh"></div></div>
+        <div class="meta-item"><div class="label">Rack</div><div class="value" id="mov-rack"></div></div>
+        <div class="meta-item"><div class="label">Vendor</div><div class="value" id="mov-vendor" style="font-size:11px"></div></div>
+        <div class="meta-item"><div class="label">Stock Mínimo</div><div class="value" id="mov-min"></div></div>
+      </div>
+
+      <!-- INGRESO FIELDS -->
+      <div style="margin-top:18px;padding:14px;background:rgba(46,213,115,0.05);border:1px solid rgba(46,213,115,0.2);border-radius:var(--radius)">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent3);letter-spacing:1px;margin-bottom:10px">⬆ INGRESO — CAMPOS REQUERIDOS</div>
+        <div class="tx-fields">
+          <div class="tx-field-group ingreso">
+            <label>Fecha de Ingreso</label>
+            <input type="date" id="ing-date">
+          </div>
+          <div class="tx-field-group ingreso">
+            <label>Order Number</label>
+            <input type="text" id="ing-order" placeholder="PO-2024-XXXX">
+          </div>
+        </div>
+        <div class="qty-row" style="margin-top:12px">
+          <div class="qty-box ingreso">
+            <div class="box-label">Cantidad a ingresar</div>
+            <input type="number" id="ing-qty" min="0" placeholder="0" oninput="previewCalc()">
+          </div>
+          <div class="qty-box" style="background:var(--surface2);border-color:var(--text-muted)">
+            <div class="box-label" style="color:var(--text-dim)">Stock resultante</div>
+            <input type="number" id="preview-ing" readonly style="color:var(--accent3);background:transparent;border-color:transparent;cursor:default">
+          </div>
+        </div>
+        <button class="btn btn-ingreso" style="margin-top:12px;width:100%" onclick="applyMove('ingreso')">✓ Confirmar Ingreso</button>
+      </div>
+
+      <!-- EGRESO FIELDS -->
+      <div style="margin-top:12px;padding:14px;background:rgba(255,71,87,0.05);border:1px solid rgba(255,71,87,0.2);border-radius:var(--radius)">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);letter-spacing:1px;margin-bottom:10px">⬇ EGRESO — CAMPOS REQUERIDOS</div>
+        <div class="tx-fields">
+          <div class="tx-field-group egreso">
+            <label>Fecha de Egreso</label>
+            <input type="date" id="egr-date">
+          </div>
+          <div class="tx-field-group egreso">
+            <label># Receipt</label>
+            <input type="text" id="egr-receipt" placeholder="REC-XXXX">
+          </div>
+        </div>
+        <div class="qty-row" style="margin-top:12px">
+          <div class="qty-box egreso">
+            <div class="box-label">Cantidad a egresar</div>
+            <input type="number" id="egr-qty" min="0" placeholder="0" oninput="previewCalc()">
+          </div>
+          <div class="qty-box" style="background:var(--surface2);border-color:var(--text-muted)">
+            <div class="box-label" style="color:var(--text-dim)">Stock resultante</div>
+            <input type="number" id="preview-egr" readonly style="color:var(--accent2);background:transparent;border-color:transparent;cursor:default">
+          </div>
+        </div>
+        <button class="btn btn-egreso" style="margin-top:12px;width:100%" onclick="applyMove('egreso')">✓ Confirmar Egreso</button>
+      </div>
+
+      <div style="margin-top:10px">
+        <button class="btn btn-export" onclick="clearMov()" style="width:100%">✕ Limpiar selección</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick history -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px">ÚLTIMOS MOVIMIENTOS</span>
+      <button class="btn btn-export" onclick="showTab('historial')" style="padding:5px 12px;font-size:10px">Ver todo →</button>
+    </div>
+    <div id="quick-hist" style="max-height:220px;overflow-y:auto">
+      <div class="empty"><div class="big">📋</div>Sin movimientos aún</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ CONSULTA ══════════════════════════════ -->
+<div id="panel-consulta" class="panel">
+  <div class="section-head">
+    <h2>Consulta de Inventario</h2>
+    <span class="sub">// solo lectura · <span id="total-prods">0</span> productos</span>
+  </div>
+
+  <div class="filter-row">
+    <span class="filter-label">🔍</span>
+    <input type="text" id="con-search" placeholder="Buscar CODE, MPN, descripción..." oninput="renderConsulta()" style="flex:1;min-width:200px">
+    <span class="filter-label">Warehouse:</span>
+    <select id="con-wh" onchange="renderConsulta()">
+      <option value="">Todos</option>
+    </select>
+    <span class="filter-label">Stock:</span>
+    <select id="con-stock" onchange="renderConsulta()">
+      <option value="">Todos</option>
+      <option value="ok">OK</option>
+      <option value="low">Bajo mínimo</option>
+      <option value="zero">Sin stock</option>
+    </select>
+    <button class="btn btn-export ml-auto" onclick="exportExcel()">⬇ Exportar Excel</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="con-table">
+      <thead>
+        <tr>
+          <th onclick="sortTable('code')">CODE</th>
+          <th onclick="sortTable('mpn')">MPN</th>
+          <th onclick="sortTable('description')">Descripción</th>
+          <th onclick="sortTable('vendor')">Vendor</th>
+          <th onclick="sortTable('qty')">Stock</th>
+          <th>Mín.</th>
+          <th onclick="sortTable('warehouse')">Warehouse</th>
+          <th onclick="sortTable('rack')">Rack</th>
+        </tr>
+      </thead>
+      <tbody id="con-body"></tbody>
+    </table>
+    <div id="con-empty" class="empty" style="display:none"><div class="big">🔍</div>Sin resultados</div>
+  </div>
+  <div class="pagination" id="con-pagination"></div>
+</div>
+
+<!-- ═══════════════════════════════════ HISTORIAL ═════════════════════════════ -->
+<div id="panel-historial" class="panel">
+  <div class="section-head">
+    <h2>Historial de Movimientos</h2>
+    <span class="sub">// persistente en base de datos compartida</span>
+  </div>
+  <div class="filter-row">
+    <select id="hist-filter" onchange="renderHistorial()">
+      <option value="">Todos</option>
+      <option value="ingreso">Solo ingresos</option>
+      <option value="egreso">Solo egresos</option>
+    </select>
+    <input type="text" id="hist-search" placeholder="Buscar por código, orden, receipt..." oninput="renderHistorial()" style="flex:1;min-width:200px">
+    <button class="btn btn-export ml-auto" onclick="exportHistory()">⬇ Exportar Historial</button>
+    <button class="btn btn-danger" onclick="confirmClearHistory()">🗑 Limpiar historial</button>
+  </div>
+  <div class="card" style="padding:0">
+    <div id="hist-body">
+      <div class="empty"><div class="big">📋</div>Sin movimientos registrados</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ ALERTAS ═══════════════════════════════ -->
+<div id="panel-alertas" class="panel">
+  <div class="section-head">
+    <h2>Alertas de Stock</h2>
+    <span class="sub">// productos bajo mínimo</span>
+  </div>
+  <div class="stats-row" id="alert-stats"></div>
+  <div class="card" style="padding:0">
+    <div id="alert-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ REPORTES ══════════════════════════════ -->
+<div id="panel-reportes" class="panel">
+  <div class="section-head">
+    <h2>Reportes</h2>
+    <span class="sub">// exportar a Excel</span>
+  </div>
+  <div class="stats-row" id="rep-stats"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:8px">INVENTARIO COMPLETO</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Exporta todos los productos con stock actual, ubicación y vendor.</div>
+      <button class="btn btn-primary" onclick="exportExcel()">⬇ Descargar Excel</button>
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent4);letter-spacing:1px;margin-bottom:8px">ALERTAS DE STOCK</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Solo productos con stock bajo o sin stock según mínimos configurados.</div>
+      <button class="btn btn-export" style="border-color:var(--accent4);color:var(--accent4)" onclick="exportAlerts()">⬇ Exportar Alertas</button>
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent3);letter-spacing:1px;margin-bottom:8px">HISTORIAL DE MOVIMIENTOS</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Todos los ingresos y egresos con Order Number y Receipt #.</div>
+      <button class="btn btn-export" style="border-color:var(--accent3);color:var(--accent3)" onclick="exportHistory()">⬇ Exportar Historial</button>
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:1px;margin-bottom:8px">STOCK MÍNIMOS</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Configura el stock mínimo de cada producto en la tabla de consulta.</div>
+      <button class="btn btn-export" onclick="showTab('consulta')">→ Ir a Consulta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ BASE DE DATOS ═════════════════════════ -->
+<div id="panel-base-datos" class="panel">
+  <div class="section-head">
+    <h2>Base de Datos</h2>
+    <span class="sub">// gestión de inventario persistente</span>
+  </div>
+
+  <div class="db-bar">
+    <span>Productos en DB: <span class="db-stat" id="db-count">0</span></span>
+    <span>Movimientos: <span class="db-stat" id="db-hist-count">0</span></span>
+    <span>Última actualización: <span class="db-stat" id="db-updated">—</span></span>
+    <span style="margin-left:auto;color:var(--accent3)">☁ Datos guardados en base de datos compartida</span>
+  </div>
+
+  <!-- Cargar Excel inicial -->
+  <div class="card">
+    <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:12px">📂 CARGAR INVENTARIO DESDE EXCEL</div>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Carga el archivo Excel inicial o actualiza el inventario. <strong style="color:var(--accent4)">⚠ Reemplazará todos los productos actuales</strong> pero conservará el historial.</p>
+
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)">
+      <div class="up-icon">📊</div>
+      <p><strong>Haz clic aquí</strong> o arrastra el archivo Excel</p>
+      <p style="margin-top:4px">Compatible con <strong>inventario_con_carga_V6.xlsx</strong> — detecta la hoja "Inventario" y columnas: CODE, MPN, Description, Preferred Vendor, Count 2026, Warehouse, Rack, Column, Level</p>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="loadExcel(this)">
+  </div>
+
+  <!-- Acciones de BD -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent3);letter-spacing:1px;margin-bottom:8px">BACKUP</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Exporta toda la base de datos como JSON para hacer backup.</div>
+      <button class="btn btn-export" style="border-color:var(--accent3);color:var(--accent3)" onclick="exportBackup()">⬇ Exportar Backup JSON</button>
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:8px">RESTAURAR</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Restaura desde un backup JSON exportado anteriormente.</div>
+      <button class="btn btn-export" onclick="document.getElementById('restore-input').click()">📂 Cargar Backup JSON</button>
+      <input type="file" id="restore-input" accept=".json" style="display:none" onchange="importBackup(this)">
+    </div>
+    <div class="card">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent2);letter-spacing:1px;margin-bottom:8px">RESETEAR BD</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Elimina todos los productos e historial. Acción irreversible.</div>
+      <button class="btn btn-danger" onclick="confirmResetDB()">🗑 Resetear Base de Datos</button>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div id="toast">
+  <span class="toast-icon" id="toast-icon">✓</span>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// PERSISTENCIA — Google Apps Script + Google Sheets
+// ══════════════════════════════════════════════════════════
+
+let API_URL = localStorage.getItem('inv_api_url') || '';
+
+function isConfigured() {
+  return API_URL && API_URL.startsWith('https://script.google.com');
+}
+
+function setDBStatus(online) {
+  const dot    = document.getElementById('db-status-dot');
+  const banner = document.getElementById('setup-banner');
+  if (!dot) return;
+  if (online) {
+    dot.textContent = '● GOOGLE'; dot.style.color = 'var(--accent3)';
+    if (banner) banner.style.display = 'none';
+  } else {
+    dot.textContent = '● LOCAL';  dot.style.color = 'var(--accent4)';
+    if (banner) banner.style.display = 'flex';
+  }
+}
+
+// Google Apps Script tiene limitaciones con POST body.
+// Enviamos los datos como parámetro GET codificado en la URL.
+async function gasRequest(payload) {
+  const encoded = encodeURIComponent(JSON.stringify(payload));
+  const url     = API_URL + '?data=' + encoded + '&t=' + Date.now();
+  const res     = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Error del servidor');
+  return json;
+}
+
+async function saveDB() {
+  localStorage.setItem('inv_db_local', JSON.stringify(DB));
+  if (!isConfigured()) { updateDBInfo(); return; }
+  try {
+    await gasRequest({ action: 'saveDB', data: DB });
+    setDBStatus(true); updateDBInfo();
+  } catch(e) { throw e; }
+}
+
+async function saveHistory() {
+  const histSer = history.map(h => ({ ...h, time: new Date(h.time).toISOString() }));
+  localStorage.setItem('inv_hist_local', JSON.stringify(histSer));
+  if (!isConfigured()) { updateDBInfo(); return; }
+  try {
+    await gasRequest({ action: 'saveHistory', data: histSer });
+    setDBStatus(true); updateDBInfo();
+  } catch(e) { toast('⚠ Error guardando historial: ' + e.message, 'err'); }
+}
+
+async function loadFromStorage() {
+  if (!isConfigured()) {
+    setDBStatus(false);
+    try { DB = JSON.parse(localStorage.getItem('inv_db_local') || '[]'); } catch(e) { DB = []; }
+    try { history = JSON.parse(localStorage.getItem('inv_hist_local') || '[]').map(h => ({ ...h, time: new Date(h.time) })); } catch(e) { history = []; }
+    return;
+  }
+  try {
+    const res  = await fetch(API_URL + '?action=load&t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    DB      = json.db      || [];
+    history = (json.history || []).map(h => ({ ...h, time: new Date(h.time) }));
+    localStorage.setItem('inv_db_local',   JSON.stringify(DB));
+    localStorage.setItem('inv_hist_local', JSON.stringify(history.map(h => ({ ...h, time: h.time.toISOString() }))));
+    setDBStatus(true);
+  } catch(e) {
+    toast('⚠ Sin conexión a Google Sheets, usando datos locales: ' + e.message, 'err');
+    setDBStatus(false);
+    try { DB = JSON.parse(localStorage.getItem('inv_db_local') || '[]'); } catch(e2) { DB = []; }
+    try { history = JSON.parse(localStorage.getItem('inv_hist_local') || '[]').map(h => ({ ...h, time: new Date(h.time) })); } catch(e2) { history = []; }
+  }
+}
+
+// ── Modal configuración ───────────────────────────────────
+function openSetup() {
+  document.getElementById('cfg-api-url').value = localStorage.getItem('inv_api_url') || '';
+  document.getElementById('cfg-test-msg').textContent = '';
+  document.getElementById('setup-modal').style.display = 'flex';
+}
+function closeSetup() {
+  document.getElementById('setup-modal').style.display = 'none';
+}
+
+async function testAndSaveConfig() {
+  const url = document.getElementById('cfg-api-url').value.trim();
+  const msg = document.getElementById('cfg-test-msg');
+  if (!url.startsWith('https://script.google.com')) {
+    msg.style.color = 'var(--accent2)'; msg.textContent = 'La URL debe empezar con https://script.google.com'; return;
+  }
+  msg.style.color = 'var(--accent)'; msg.textContent = 'Probando conexión...';
+  try {
+    const res  = await fetch(url + '?action=load&t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json.ok === undefined) throw new Error('Respuesta inválida del script');
+    localStorage.setItem('inv_api_url', url);
+    API_URL = url;
+    msg.style.color = 'var(--accent3)'; msg.textContent = '✓ Conexión exitosa. Cargando datos...';
+    setTimeout(async () => {
+      closeSetup();
+      showLoadingOverlay(true);
+      await loadFromStorage();
+      showLoadingOverlay(false);
+      refreshUI();
+      toast('✓ Conectado a Google Sheets — datos compartidos activos', 'ok');
+    }, 800);
+  } catch(e) {
+    msg.style.color = 'var(--accent2)'; msg.textContent = '✗ Error: ' + e.message;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════
+let DB = [];
+let history = [];
+let currentProduct = null;
+let conPage = 1;
+const PAGE_SIZE = 30;
+let sortCol = 'code';
+let sortDir = 1;
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+async function init() {
+  // Show loading overlay while fetching shared data
+  showLoadingOverlay(true);
+  await loadFromStorage();
+  showLoadingOverlay(false);
+  refreshUI();
+  updateClock();
+  setInterval(updateClock, 1000);
+  // Auto-refresh every 30s to sync changes from other users
+  setInterval(async () => {
+    await loadFromStorage();
+    refreshUI();
+  }, 30000);
+}
+
+function showLoadingOverlay(show) {
+  let el = document.getElementById('loading-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-overlay';
+    el.style.cssText = `position:fixed;inset:0;background:rgba(10,14,23,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);color:var(--accent);gap:16px;`;
+    el.innerHTML = `<div style="font-size:32px;animation:spin 1s linear infinite">⟳</div><div style="font-size:13px;letter-spacing:2px">CARGANDO BASE DE DATOS COMPARTIDA...</div><div style="font-size:11px;color:var(--text-dim)">Sincronizando con todos los usuarios</div>`;
+    document.body.appendChild(el);
+  }
+  el.style.display = show ? 'flex' : 'none';
+}
+
+function refreshUI() {
+  document.getElementById('total-prods').textContent = DB.length;
+  updateDBInfo();
+  populateWarehouseFilter();
+  updateAlerts();
+  renderConsulta();
+  renderStats();
+  renderQuickHist();
+}
+
+function populateWarehouseFilter() {
+  const whs = [...new Set(DB.map(p => p.warehouse.trim()).filter(Boolean))].sort();
+  const sel = document.getElementById('con-wh');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>';
+  whs.forEach(w => {
+    const o = document.createElement('option');
+    o.value = w; o.textContent = w;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+}
+
+function updateDBInfo() {
+  document.getElementById('db-count').textContent = DB.length;
+  document.getElementById('db-hist-count').textContent = history.length;
+  document.getElementById('db-updated').textContent = new Date().toLocaleString('es');
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleString('es', {
+    dateStyle: 'short', timeStyle: 'short'
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  const tabs = {'movimiento':0,'consulta':1,'historial':2,'alertas':3,'reportes':4,'base-datos':5};
+  document.querySelectorAll('.tab')[tabs[name]].classList.add('active');
+  if(name === 'alertas') renderAlerts();
+  if(name === 'historial') renderHistorial();
+  if(name === 'reportes') renderStats();
+  if(name === 'base-datos') updateDBInfo();
+}
+
+// ══════════════════════════════════════════════════════════
+// EXCEL LOAD
+// ══════════════════════════════════════════════════════════
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) processExcelFile(file);
+}
+
+function loadExcel(input) {
+  const file = input.files[0];
+  if (file) processExcelFile(file);
+  input.value = '';
+}
+
+function processExcelFile(file) {
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+
+      // Buscar la hoja "Inventario" primero, si no la primera hoja
+      let sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('inventario')) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+      if (!rows.length) { toast('El archivo está vacío o sin datos', 'err'); return; }
+
+      // Detectar columnas automáticamente — probamos varios nombres posibles
+      // incluyendo los nombres exactos del archivo inventario_con_carga_V6.xlsx
+      function findCol(row, candidates) {
+        for (const k of candidates) {
+          if (row[k] !== undefined && row[k] !== '') return k;
+        }
+        // También buscar coincidencia parcial (trim + lowercase)
+        const keys = Object.keys(row);
+        for (const cand of candidates) {
+          const found = keys.find(k => k.trim().toLowerCase() === cand.trim().toLowerCase());
+          if (found) return found;
+        }
+        return null;
+      }
+
+      // Detectar nombres de columna desde la primera fila con datos
+      const firstRow = rows[0];
+      const colKeys = {
+        code:        findCol(firstRow, ['CODE','Code','code','Código','CODIGO']),
+        mpn:         findCol(firstRow, ['MPN','Mpn','mpn']),
+        description: findCol(firstRow, ['Description','Descripción','descripcion','DESCRIPCION','Descripcion']),
+        vendor:      findCol(firstRow, ['Preferred Vendor','Vendor','vendor','VENDOR','Proveedor']),
+        qty:         findCol(firstRow, ['Count 2026','Cantidad Ajustada','Stock Actual','Stock','Qty','qty','Cantidad','Count']),
+        minStock:    findCol(firstRow, ['Stock Mínimo','Stock Minimo','Min Stock','minStock','MIN']),
+        warehouse:   findCol(firstRow, ['Warehouse ','Warehouse','warehouse','WAREHOUSE','Almacén']),
+        rack:        findCol(firstRow, ['Rack','rack','RACK']),
+        column:      findCol(firstRow, ['Column','Columna','columna','column']),
+        level:       findCol(firstRow, ['Level','Nivel','nivel','level']),
+      };
+
+      // Verificar que al menos CODE existe
+      if (!colKeys.code) {
+        toast(`No se encontró columna CODE. Hoja: "${sheetName}". Columnas encontradas: ${Object.keys(firstRow).join(', ')}`, 'err');
+        return;
+      }
+
+      const newDB = rows.map(row => {
+        const code = String(row[colKeys.code] ?? '').trim();
+        if (!code || code === 'undefined') return null;
+        return {
+          code,
+          mpn:         colKeys.mpn         ? String(row[colKeys.mpn] ?? '').trim()         : '',
+          description: colKeys.description  ? String(row[colKeys.description] ?? '').trim() : '',
+          vendor:      colKeys.vendor       ? String(row[colKeys.vendor] ?? '').trim()      : '',
+          qty:         colKeys.qty          ? (parseInt(row[colKeys.qty]) || 0)             : 0,
+          minStock:    colKeys.minStock     ? (parseInt(row[colKeys.minStock]) || 5)        : 5,
+          warehouse:   colKeys.warehouse    ? String(row[colKeys.warehouse] ?? '').trim()   : '',
+          rack:        colKeys.rack         ? String(row[colKeys.rack] ?? '').trim()        : '',
+          column:      colKeys.column       ? String(row[colKeys.column] ?? '').trim()      : '',
+          level:       colKeys.level        ? String(row[colKeys.level] ?? '').trim()       : '',
+        };
+      }).filter(Boolean);
+
+      if (!newDB.length) {
+        toast('No se encontraron productos válidos. Verifica que la hoja tenga la columna CODE.', 'err');
+        return;
+      }
+
+      DB = newDB;
+      // Guardar con feedback de progreso
+      toast(`⟳ Subiendo ${DB.length} productos a la base de datos...`, 'ok');
+      try {
+        await saveDB();
+        refreshUI();
+        toast(`✓ ${DB.length} productos cargados desde "${sheetName}"`, 'ok');
+      } catch(saveErr) {
+        toast('Error guardando en Google Sheets: ' + saveErr.message, 'err');
+      }
+    } catch(err) {
+      toast('Error leyendo Excel: ' + err.message, 'err');
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ══════════════════════════════════════════════════════════
+// MOVIMIENTO — autocomplete
+// ══════════════════════════════════════════════════════════
+let acIdx = -1;
+let acResults = [];
+
+function movSearch(val) {
+  const q = val.trim().toLowerCase();
+  const ac = document.getElementById('mov-autocomplete');
+  if (!q) { ac.style.display = 'none'; return; }
+
+  acResults = DB.filter(p =>
+    p.code.toLowerCase().includes(q) || p.mpn.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+  ).slice(0, 12);
+
+  if (!acResults.length) { ac.style.display = 'none'; return; }
+
+  ac.innerHTML = acResults.map((p, i) => {
+    const highlight = (s) => {
+      const idx = s.toLowerCase().indexOf(q);
+      if (idx === -1) return s;
+      return s.slice(0, idx) + `<span class="match">${s.slice(idx, idx + q.length)}</span>` + s.slice(idx + q.length);
+    };
+    const qtyClass = p.qty === 0 ? 'qty-zero' : p.qty <= p.minStock ? 'qty-low' : 'qty-ok';
+    return `<div data-idx="${i}" onclick="selectProduct(${i})">
+      <span class="match" style="color:var(--accent)">${highlight(p.code)}</span>
+      <span style="color:var(--text-dim)"> · ${highlight(p.mpn)}</span>
+      <span class="${qtyClass}" style="float:right;font-weight:700">${p.qty}</span>
+      <div class="detail">${p.description.slice(0, 60)}${p.description.length > 60 ? '…' : ''}</div>
+    </div>`;
+  }).join('');
+  ac.style.display = 'block';
+  acIdx = -1;
+}
+
+function movKeydown(e) {
+  const ac = document.getElementById('mov-autocomplete');
+  if (ac.style.display === 'none') return;
+  const items = ac.querySelectorAll('div');
+  if (e.key === 'ArrowDown') { acIdx = Math.min(acIdx + 1, items.length - 1); highlightAc(items); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { acIdx = Math.max(acIdx - 1, 0); highlightAc(items); e.preventDefault(); }
+  else if (e.key === 'Enter' && acIdx >= 0) { selectProduct(acIdx); e.preventDefault(); }
+  else if (e.key === 'Escape') { ac.style.display = 'none'; }
+}
+function highlightAc(items) {
+  items.forEach((item, i) => item.style.background = i === acIdx ? 'var(--border)' : '');
+}
+
+function selectProduct(idx) {
+  currentProduct = acResults[idx];
+  document.getElementById('mov-search').value = currentProduct.code;
+  document.getElementById('mov-autocomplete').style.display = 'none';
+  renderMovProduct();
+}
+
+function renderMovProduct() {
+  const p = currentProduct;
+  const qtyClass = p.qty === 0 ? 'qty-zero' : p.qty <= p.minStock ? 'qty-low' : 'qty-ok';
+  document.getElementById('mov-code').textContent = p.code;
+  document.getElementById('mov-desc').textContent = p.description || '—';
+  document.getElementById('mov-mpn').textContent = p.mpn || '—';
+  document.getElementById('mov-qty').textContent = p.qty;
+  document.getElementById('mov-qty').className = 'value ' + qtyClass;
+  document.getElementById('mov-wh').textContent = p.warehouse.trim() || '—';
+  document.getElementById('mov-rack').textContent = [p.rack, p.column, p.level].filter(Boolean).join(' / ') || '—';
+  document.getElementById('mov-vendor').textContent = p.vendor || '—';
+  document.getElementById('mov-min').textContent = p.minStock;
+
+  // Set today's date as default
+  const today = new Date().toISOString().slice(0, 10);
+  if (!document.getElementById('ing-date').value) document.getElementById('ing-date').value = today;
+  if (!document.getElementById('egr-date').value) document.getElementById('egr-date').value = today;
+
+  document.getElementById('ing-qty').value = '';
+  document.getElementById('egr-qty').value = '';
+  document.getElementById('preview-ing').value = p.qty;
+  document.getElementById('preview-egr').value = p.qty;
+  document.getElementById('mov-product').style.display = 'block';
+}
+
+function previewCalc() {
+  if (!currentProduct) return;
+  const ing = parseInt(document.getElementById('ing-qty').value) || 0;
+  const egr = parseInt(document.getElementById('egr-qty').value) || 0;
+
+  const resIng = currentProduct.qty + ing;
+  document.getElementById('preview-ing').value = resIng;
+  document.getElementById('preview-ing').style.color = resIng <= 0 ? 'var(--accent2)' : resIng <= currentProduct.minStock ? 'var(--accent4)' : 'var(--accent3)';
+
+  const resEgr = currentProduct.qty - egr;
+  document.getElementById('preview-egr').value = resEgr;
+  document.getElementById('preview-egr').style.color = resEgr <= 0 ? 'var(--accent2)' : resEgr <= currentProduct.minStock ? 'var(--accent4)' : 'var(--accent3)';
+}
+
+async function applyMove(type) {
+  if (!currentProduct) return;
+
+  if (type === 'ingreso') {
+    const val = parseInt(document.getElementById('ing-qty').value);
+    const orderNum = document.getElementById('ing-order').value.trim();
+    const date = document.getElementById('ing-date').value;
+
+    if (!val || val <= 0) { toast('Ingresa una cantidad válida', 'err'); return; }
+    if (!orderNum) { toast('Order Number es requerido para ingresos', 'err'); return; }
+    if (!date) { toast('La fecha es requerida', 'err'); return; }
+
+    const p = currentProduct;
+    const oldQty = p.qty;
+    p.qty += val;
+
+    history.unshift({
+      type: 'ingreso',
+      code: p.code, mpn: p.mpn, description: p.description,
+      qty: val, before: oldQty, after: p.qty,
+      orderNumber: orderNum,
+      receiptNo: '',
+      date: date,
+      time: new Date()
+    });
+
+    toast(`⟳ Guardando ingreso...`, 'ok');
+    try {
+      await saveDB();
+      await saveHistory();
+    } catch(e) {
+      // Revertir si falla el guardado
+      p.qty = oldQty;
+      history.shift();
+      toast('⚠ Error guardando en Google Sheets: ' + e.message, 'err');
+      return;
+    }
+    updateAlerts();
+    renderConsulta();
+    renderMovProduct();
+    renderQuickHist();
+    toast(`⬆ Ingreso de ${val} · ${p.code} · Orden: ${orderNum}`, 'ok');
+    document.getElementById('ing-qty').value = '';
+    document.getElementById('ing-order').value = '';
+    previewCalc();
+
+  } else {
+    const val = parseInt(document.getElementById('egr-qty').value);
+    const receipt = document.getElementById('egr-receipt').value.trim();
+    const date = document.getElementById('egr-date').value;
+
+    if (!val || val <= 0) { toast('Ingresa una cantidad válida', 'err'); return; }
+    if (!receipt) { toast('# Receipt es requerido para egresos', 'err'); return; }
+    if (!date) { toast('La fecha es requerida', 'err'); return; }
+
+    const p = currentProduct;
+    if (val > p.qty) { toast(`Stock insuficiente (actual: ${p.qty})`, 'err'); return; }
+
+    const oldQty = p.qty;
+    p.qty -= val;
+
+    history.unshift({
+      type: 'egreso',
+      code: p.code, mpn: p.mpn, description: p.description,
+      qty: val, before: oldQty, after: p.qty,
+      orderNumber: '',
+      receiptNo: receipt,
+      date: date,
+      time: new Date()
+    });
+
+    toast(`⟳ Guardando egreso...`, 'ok');
+    try {
+      await saveDB();
+      await saveHistory();
+    } catch(e) {
+      // Revertir si falla el guardado
+      p.qty = oldQty;
+      history.shift();
+      toast('⚠ Error guardando en Google Sheets: ' + e.message, 'err');
+      return;
+    }
+    updateAlerts();
+    renderConsulta();
+    renderMovProduct();
+    renderQuickHist();
+    toast(`⬇ Egreso de ${val} · ${p.code} · Receipt: ${receipt}`, 'ok');
+    document.getElementById('egr-qty').value = '';
+    document.getElementById('egr-receipt').value = '';
+    previewCalc();
+  }
+}
+
+function clearMov() {
+  currentProduct = null;
+  document.getElementById('mov-search').value = '';
+  document.getElementById('mov-product').style.display = 'none';
+}
+
+function renderQuickHist() {
+  const el = document.getElementById('quick-hist');
+  if (!history.length) {
+    el.innerHTML = '<div class="empty"><div class="big">📋</div>Sin movimientos aún</div>';
+    return;
+  }
+  el.innerHTML = history.slice(0, 8).map(h => {
+    const ref = h.type === 'ingreso'
+      ? (h.orderNumber ? `<span style="color:var(--accent4);font-size:10px"> · ${h.orderNumber}</span>` : '')
+      : (h.receiptNo ? `<span style="color:var(--accent4);font-size:10px"> · ${h.receiptNo}</span>` : '');
+    return `<div class="hist-item">
+      <span class="hist-badge ${h.type === 'ingreso' ? 'ing' : 'egr'}">${h.type.toUpperCase()}</span>
+      <span class="hist-code">${h.code}${ref}</span>
+      <span class="hist-qty ${h.type === 'ingreso' ? 'ing' : 'egr'}">${h.type === 'ingreso' ? '+' : '-'}${h.qty}</span>
+      <span class="hist-time">${h.date || new Date(h.time).toLocaleDateString('es')}</span>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// CONSULTA
+// ══════════════════════════════════════════════════════════
+function getFiltered() {
+  const q = document.getElementById('con-search').value.trim().toLowerCase();
+  const wh = document.getElementById('con-wh').value;
+  const stock = document.getElementById('con-stock').value;
+
+  return DB.filter(p => {
+    if (q && !p.code.toLowerCase().includes(q) && !p.mpn.toLowerCase().includes(q) && !p.description.toLowerCase().includes(q) && !p.vendor.toLowerCase().includes(q)) return false;
+    if (wh && p.warehouse.trim() !== wh) return false;
+    if (stock === 'ok' && p.qty <= p.minStock) return false;
+    if (stock === 'low' && (p.qty === 0 || p.qty > p.minStock)) return false;
+    if (stock === 'zero' && p.qty !== 0) return false;
+    return true;
+  }).sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (sortCol === 'qty') return (va - vb) * sortDir;
+    return String(va).localeCompare(String(vb)) * sortDir;
+  });
+}
+
+function renderConsulta() {
+  const filtered = getFiltered();
+  const total = filtered.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  conPage = Math.min(conPage, pages || 1);
+  const slice = filtered.slice((conPage - 1) * PAGE_SIZE, conPage * PAGE_SIZE);
+
+  const tbody = document.getElementById('con-body');
+  const empty = document.getElementById('con-empty');
+
+  if (!slice.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    document.getElementById('con-pagination').innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = slice.map(p => {
+    const qc = p.qty === 0 ? 'qty-zero' : p.qty <= p.minStock ? 'qty-low' : 'qty-ok';
+    const loc = [p.rack, p.column, p.level].filter(s => s && s.trim()).join('/') || '—';
+    return `<tr>
+      <td class="code-cell">${p.code}</td>
+      <td class="mpn-cell">${p.mpn || '—'}</td>
+      <td style="max-width:260px;white-space:normal;font-size:11px">${p.description || '—'}</td>
+      <td style="font-size:11px;color:var(--text-dim)">${p.vendor || '—'}</td>
+      <td class="qty-cell ${qc}">${p.qty}</td>
+      <td><input class="min-input" type="number" value="${p.minStock}" min="0" onchange="setMin('${p.code}',this.value)" title="Stock mínimo"></td>
+      <td style="font-size:11px">${p.warehouse.trim() || '—'}</td>
+      <td style="font-size:11px">${loc}</td>
+    </tr>`;
+  }).join('');
+
+  const pag = document.getElementById('con-pagination');
+  if (pages <= 1) { pag.innerHTML = `<span>${total} productos</span>`; return; }
+  let html = `<span>${total} productos · pág ${conPage}/${pages}</span>`;
+  html += `<button class="page-btn" onclick="goPage(1)" ${conPage===1?'disabled':''}>«</button>`;
+  html += `<button class="page-btn" onclick="goPage(${conPage-1})" ${conPage===1?'disabled':''}>‹</button>`;
+  for (let i = Math.max(1,conPage-2); i <= Math.min(pages,conPage+2); i++) {
+    html += `<button class="page-btn ${i===conPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  html += `<button class="page-btn" onclick="goPage(${conPage+1})" ${conPage===pages?'disabled':''}>›</button>`;
+  html += `<button class="page-btn" onclick="goPage(${pages})" ${conPage===pages?'disabled':''}>»</button>`;
+  pag.innerHTML = html;
+}
+
+function goPage(n) { conPage = n; renderConsulta(); }
+
+function sortTable(col) {
+  if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = 1; }
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc','sort-desc'));
+  const cols = ['code','mpn','description','vendor','qty','','warehouse','rack'];
+  const idx = cols.indexOf(col);
+  if (idx >= 0) {
+    const th = document.querySelectorAll('#con-table th')[idx];
+    th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+  }
+  renderConsulta();
+}
+
+async function setMin(code, val) {
+  const p = DB.find(x => x.code === code);
+  if (p) { p.minStock = parseInt(val) || 0; await saveDB(); updateAlerts(); }
+}
+
+// ══════════════════════════════════════════════════════════
+// HISTORIAL
+// ══════════════════════════════════════════════════════════
+function renderHistorial() {
+  const filter = document.getElementById('hist-filter').value;
+  const search = document.getElementById('hist-search').value.trim().toLowerCase();
+
+  let items = history;
+  if (filter) items = items.filter(h => h.type === filter);
+  if (search) items = items.filter(h =>
+    h.code.toLowerCase().includes(search) ||
+    (h.orderNumber || '').toLowerCase().includes(search) ||
+    (h.receiptNo || '').toLowerCase().includes(search) ||
+    (h.description || '').toLowerCase().includes(search)
+  );
+
+  const el = document.getElementById('hist-body');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty"><div class="big">📋</div>Sin movimientos</div>';
+    return;
+  }
+  el.innerHTML = items.map(h => {
+    const refLabel = h.type === 'ingreso'
+      ? (h.orderNumber ? `<span class="hist-ref">📋 ${h.orderNumber}</span>` : '<span class="hist-ref" style="color:var(--text-muted)">—</span>')
+      : (h.receiptNo ? `<span class="hist-ref">🧾 ${h.receiptNo}</span>` : '<span class="hist-ref" style="color:var(--text-muted)">—</span>');
+    return `
+      <div class="hist-item">
+        <span class="hist-badge ${h.type === 'ingreso' ? 'ing' : 'egr'}">${h.type.toUpperCase()}</span>
+        <span class="hist-code" style="min-width:200px">${h.code}</span>
+        <span style="color:var(--text-dim);font-size:11px;flex:1;min-width:120px">${(h.description||'').slice(0,40)}${(h.description||'').length>40?'…':''}</span>
+        <span class="hist-qty ${h.type === 'ingreso' ? 'ing' : 'egr'}">${h.type === 'ingreso' ? '+' : '-'}${h.qty}</span>
+        <span style="color:var(--text-dim);font-size:11px;min-width:70px">${h.before}→${h.after}</span>
+        ${refLabel}
+        <span class="hist-time">${h.date || new Date(h.time).toLocaleDateString('es')} ${new Date(h.time).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</span>
+      </div>`;
+  }).join('');
+}
+
+async function confirmClearHistory() {
+  if (confirm('¿Seguro que quieres eliminar todo el historial? Esta acción no se puede deshacer.')) {
+    history = [];
+    await saveHistory();
+    renderHistorial();
+    renderQuickHist();
+    updateDBInfo();
+    toast('Historial eliminado', 'ok');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ALERTS
+// ══════════════════════════════════════════════════════════
+function updateAlerts() {
+  const zero = DB.filter(p => p.qty === 0).length;
+  const low = DB.filter(p => p.qty > 0 && p.qty <= p.minStock).length;
+  const total = zero + low;
+  document.getElementById('alertCount').textContent = total;
+  document.getElementById('alertBadge').style.display = total ? 'block' : 'none';
+}
+
+function renderAlerts() {
+  const zero = DB.filter(p => p.qty === 0);
+  const low = DB.filter(p => p.qty > 0 && p.qty <= p.minStock);
+
+  const stats = document.getElementById('alert-stats');
+  stats.innerHTML = `
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent2)">${zero.length}</div><div class="stat-lbl">Sin stock</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent4)">${low.length}</div><div class="stat-lbl">Stock bajo</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${DB.length}</div><div class="stat-lbl">Total productos</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent3)">${DB.filter(p=>p.qty>p.minStock).length}</div><div class="stat-lbl">Stock OK</div></div>
+  `;
+
+  const body = document.getElementById('alert-body');
+  const all = [...zero.map(p=>({...p,alertType:'zero'})), ...low.map(p=>({...p,alertType:'low'}))];
+  if (!all.length) {
+    body.innerHTML = '<div class="empty"><div class="big">✅</div>Todo el inventario está sobre el mínimo</div>';
+    return;
+  }
+  body.innerHTML = all.map(p => `
+    <div class="alert-item">
+      <div class="alert-dot ${p.alertType}"></div>
+      <div class="alert-info">
+        <div class="alert-code">${p.code} · ${p.mpn}</div>
+        <div class="alert-desc">${p.description || '—'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="alert-qty ${p.alertType}">${p.qty}</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">mín: ${p.minStock}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════
+function renderStats() {
+  const total = DB.length;
+  const zero = DB.filter(p=>p.qty===0).length;
+  const low = DB.filter(p=>p.qty>0&&p.qty<=p.minStock).length;
+  const totalUnits = DB.reduce((s,p)=>s+p.qty,0);
+
+  document.getElementById('rep-stats').innerHTML = `
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${total}</div><div class="stat-lbl">Productos</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent3)">${totalUnits.toLocaleString()}</div><div class="stat-lbl">Unidades totales</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent2)">${zero}</div><div class="stat-lbl">Sin stock</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent4)">${low}</div><div class="stat-lbl">Stock bajo</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent3)">${history.filter(h=>h.type==='ingreso').length}</div><div class="stat-lbl">Total ingresos</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent2)">${history.filter(h=>h.type==='egreso').length}</div><div class="stat-lbl">Total egresos</div></div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// EXPORTS
+// ══════════════════════════════════════════════════════════
+function exportExcel() {
+  if (!DB.length) { toast('No hay datos para exportar', 'err'); return; }
+  const data = [
+    ['CODE','MPN','Descripción','Vendor','Stock Actual','Stock Mínimo','Warehouse','Rack','Columna','Nivel'],
+    ...DB.map(p => [p.code,p.mpn,p.description,p.vendor,p.qty,p.minStock,p.warehouse.trim(),p.rack,p.column,p.level])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [28,18,50,30,12,12,12,14,10,10].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+  XLSX.writeFile(wb, `inventario_${today()}.xlsx`);
+  toast('Excel exportado ✓', 'ok');
+}
+
+function exportAlerts() {
+  const items = DB.filter(p => p.qty <= p.minStock);
+  if (!items.length) { toast('No hay alertas para exportar', 'err'); return; }
+  const data = [
+    ['Estado','CODE','MPN','Descripción','Stock Actual','Stock Mínimo','Warehouse'],
+    ...items.map(p => [p.qty===0?'SIN STOCK':'STOCK BAJO',p.code,p.mpn,p.description,p.qty,p.minStock,p.warehouse.trim()])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [12,28,18,50,12,12,12].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Alertas');
+  XLSX.writeFile(wb, `alertas_${today()}.xlsx`);
+  toast('Alertas exportadas ✓', 'ok');
+}
+
+function exportHistory() {
+  if (!history.length) { toast('Sin movimientos en el historial', 'err'); return; }
+  const data = [
+    ['Tipo','Fecha','CODE','MPN','Descripción','Cantidad','Stock Anterior','Stock Nuevo','Order Number','# Receipt','Timestamp'],
+    ...history.map(h => [
+      h.type.toUpperCase(),
+      h.date || new Date(h.time).toLocaleDateString('es'),
+      h.code, h.mpn, h.description, h.qty, h.before, h.after,
+      h.orderNumber || '',
+      h.receiptNo || '',
+      new Date(h.time).toLocaleString('es')
+    ])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [10,12,28,18,50,10,14,12,20,20,20].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Historial');
+  XLSX.writeFile(wb, `historial_${today()}.xlsx`);
+  toast('Historial exportado ✓', 'ok');
+}
+
+// ══════════════════════════════════════════════════════════
+// BACKUP / RESTORE
+// ══════════════════════════════════════════════════════════
+function exportBackup() {
+  const backup = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    db: DB,
+    history: history.map(h => ({ ...h, time: new Date(h.time).toISOString() }))
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `inventario_backup_${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Backup exportado ✓', 'ok');
+}
+
+function importBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const backup = JSON.parse(e.target.result);
+      if (!backup.db || !Array.isArray(backup.db)) { toast('Archivo inválido', 'err'); return; }
+      if (!confirm(`¿Restaurar backup con ${backup.db.length} productos y ${(backup.history||[]).length} movimientos? Esto reemplazará los datos actuales.`)) return;
+      DB = backup.db;
+      history = (backup.history || []).map(h => ({ ...h, time: new Date(h.time) }));
+      Promise.all([saveDB(), saveHistory()]).then(() => {
+        refreshUI();
+        toast(`✓ Backup restaurado: ${DB.length} productos, ${history.length} movimientos`, 'ok');
+      });
+    } catch(err) {
+      toast('Error leyendo backup: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+async function confirmResetDB() {
+  if (!confirm('¿RESETEAR COMPLETAMENTE la base de datos? Se eliminarán TODOS los productos y el historial. Esta acción NO se puede deshacer.')) return;
+  if (!confirm('Confirma de nuevo: ¿Eliminar todo?')) return;
+  DB = [];
+  history = [];
+  await saveDB();
+  await saveHistory();
+  refreshUI();
+  toast('Base de datos reseteada', 'ok');
+}
+
+// ══════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════
+function today() {
+  return new Date().toISOString().slice(0,10);
+}
+
+let toastTimer;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  const icon = document.getElementById('toast-icon');
+  const msgEl = document.getElementById('toast-msg');
+  icon.textContent = type === 'ok' ? '✓' : '✕';
+  msgEl.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+async function syncNow() {
+  toast('Sincronizando...', 'ok');
+  await loadFromStorage();
+  refreshUI();
+  toast('✓ Sincronizado con base de datos compartida', 'ok');
+}
+
+// Close autocomplete on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) {
+    document.getElementById('mov-autocomplete').style.display = 'none';
+  }
+});
+
+// ══════════════════════════════════════════════════════════
+// PDF DELIVERY RECEIPT → EGRESO AUTOMÁTICO
+// ══════════════════════════════════════════════════════════
+let pdfEgresosPending = [];
+
+function handlePdfDrop(e) {
+  e.preventDefault();
+  document.getElementById('pdf-drop-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') processPdfReceipt(file);
+  else toast('Solo se aceptan archivos PDF', 'err');
+}
+
+function handlePdfReceiptFile(input) {
+  const file = input.files[0];
+  if (file) processPdfReceipt(file);
+  input.value = '';
+}
+
+async function processPdfReceipt(file) {
+  document.getElementById('pdf-drop-zone').style.display = 'none';
+  document.getElementById('pdf-preview').style.display = 'none';
+  document.getElementById('pdf-processing').style.display = 'block';
+  document.getElementById('pdf-processing-msg').textContent = 'Leyendo PDF...';
+
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    // Collect all text items with their X/Y positions from all pages
+    let allItems = [];
+    for (let p = 1; p <= pdfDoc.numPages; p++) {
+      const page = await pdfDoc.getPage(p);
+      const tc = await page.getTextContent();
+      tc.items.forEach(function(item) {
+        allItems.push({ str: item.str.trim(), x: item.transform[4], y: item.transform[5] });
+      });
+    }
+
+    const strings = allItems.map(function(i){ return i.str; });
+    const fullText = strings.join(' ');
+    console.log('[PDF] all strings:', strings);
+
+    // ── Extract Delivery # from filename (last 6 digits) ──
+    // e.g. "delivery_receipt_001863.pdf" → "001863"
+    let deliveryNo = '';
+    const fnMatch = file.name.match(/(\d{6})\D*\.pdf$/i);
+    if (fnMatch) {
+      deliveryNo = fnMatch[1];
+    }
+    console.log('[PDF] deliveryNo from filename:', deliveryNo, '| file:', file.name);
+
+    // ── Duplicate check ──
+    const alreadyImported = history.some(function(h){
+      return h.type === 'egreso' && h.receiptNo === deliveryNo;
+    });
+    if (alreadyImported) {
+      throw new Error('El Delivery Receipt #' + deliveryNo + ' ya fue importado anteriormente.');
+    }
+
+    // ── Extract DATE ──
+    let date = new Date().toISOString().slice(0,10);
+    const dateM = fullText.match(/(\d{2})[\\/\-](\d{2})[\\/\-](\d{4})/);
+    if (dateM) {
+      date = dateM[3] + '-' + dateM[1] + '-' + dateM[2]; // MM/DD/YYYY → YYYY-MM-DD
+    }
+
+    // ── Extract product rows ──
+    // Strategy: find rows where PRODUCT MODEL column has alphanumeric code (contains letters+digits+dashes)
+    // and nearby there is a numeric TOTAL QTY.
+    // Group items by Y position (same row = within 5pt of each other).
+    // Sort rows top→bottom (descending Y in PDF coords).
+    const rowMap = {};
+    allItems.forEach(function(item) {
+      if (!item.str) return;
+      const rowKey = Math.round(item.y / 5) * 5;
+      if (!rowMap[rowKey]) rowMap[rowKey] = [];
+      rowMap[rowKey].push(item);
+    });
+
+    // Sort rows top to bottom (higher Y = higher on page in pdf.js)
+    const sortedRows = Object.keys(rowMap)
+      .map(Number)
+      .sort(function(a,b){ return b - a; })
+      .map(function(k){ return rowMap[k].sort(function(a,b){ return a.x - b.x; }); });
+
+    // Find header row index containing "PRODUCT MODEL" and "TOTAL QTY"
+    let headerRowIdx = -1;
+    for (let r = 0; r < sortedRows.length; r++) {
+      const rowText = sortedRows[r].map(function(i){ return i.str; }).join(' ').toUpperCase();
+      if (rowText.includes('PRODUCT') && rowText.includes('MODEL')) {
+        headerRowIdx = r;
+        break;
+      }
+    }
+
+    const items = [];
+
+    if (headerRowIdx >= 0) {
+      // Determine X positions of key columns from header row
+      const headerItems = sortedRows[headerRowIdx];
+      const headerText  = headerItems.map(function(i){ return i.str.toUpperCase(); });
+
+      // Find x-center of PRODUCT MODEL column
+      let productX = null, totalQtyX = null;
+      headerItems.forEach(function(item) {
+        const t = item.str.toUpperCase();
+        if (t.includes('PRODUCT') || t.includes('MODEL')) {
+          productX = productX === null ? item.x : Math.min(productX, item.x);
+        }
+        if (t.includes('TOTAL') || (t.includes('QTY') && totalQtyX === null)) {
+          totalQtyX = item.x;
+        }
+      });
+
+      console.log('[PDF] headerRowIdx:', headerRowIdx, 'productX:', productX, 'totalQtyX:', totalQtyX);
+
+      // Scan rows below the header for product data rows
+      for (let r = headerRowIdx + 1; r < sortedRows.length; r++) {
+        const row = sortedRows[r];
+        const rowStrings = row.map(function(i){ return i.str; });
+        const rowJoined  = rowStrings.join(' ').toUpperCase();
+
+        // Skip TOTALS row, empty rows, signature rows
+        if (rowJoined.includes('TOTALS') || rowJoined.includes('SIGNATURE') || rowJoined.includes('NOTES') || !rowJoined.trim()) continue;
+
+        // Find token that looks like a product code (letters+digits+dashes, len > 3)
+        let productModel = '';
+        let totalQty = 0;
+
+        row.forEach(function(item) {
+          const s = item.str;
+          // Product model: alphanumeric with dashes, at least 5 chars, contains both letters and digits
+          if (!productModel && /^[A-Z0-9][A-Z0-9\-]{4,}$/i.test(s) && /[A-Z]/i.test(s) && /\d/.test(s)) {
+            productModel = s;
+          }
+          // TOTAL QTY: a standalone integer. If we know totalQtyX, prefer item near that x.
+          if (/^\d+$/.test(s) && parseInt(s) > 0) {
+            if (totalQtyX !== null) {
+              // pick the number closest to totalQtyX
+              if (!totalQty || Math.abs(item.x - totalQtyX) < Math.abs(totalQty._x - totalQtyX)) {
+                totalQty = { val: parseInt(s), _x: item.x };
+              }
+            } else {
+              totalQty = { val: parseInt(s), _x: item.x };
+            }
+          }
+        });
+
+        if (typeof totalQty === 'object') totalQty = totalQty.val;
+
+        if (productModel && totalQty > 0) {
+          items.push({ productModel: productModel, totalQty: totalQty });
+        }
+      }
+    }
+
+    // Fallback: simple regex scan if no items found via layout
+    if (items.length === 0) {
+      // Look for lines like "F3 FVT-061-VAP-F-50W-H-TCP 9 1 9"
+      // Pattern: code with dashes followed by numbers
+      const codePattern = /([A-Z][A-Z0-9\-]{4,})\s+(\d+)\s+(\d+)\s+(\d+)/g;
+      let m;
+      while ((m = codePattern.exec(fullText)) !== null) {
+        const code = m[1];
+        const totalQty = parseInt(m[4]); // last number = TOTAL QTY
+        if (code && totalQty > 0 && !code.includes('PRODUCT') && !code.includes('MODEL')) {
+          items.push({ productModel: code, totalQty: totalQty });
+        }
+      }
+    }
+
+    console.log('[PDF] Parsed result:', { deliveryNo, date, items });
+
+    if (items.length === 0) throw new Error('No se encontraron productos en el PDF. Verifica que sea un Delivery Receipt de Spectrasol.');
+
+    document.getElementById('pdf-processing').style.display = 'none';
+    renderPdfPreview({ deliveryNo: deliveryNo || '', date: date, items: items });
+
+  } catch(err) {
+    document.getElementById('pdf-processing').style.display = 'none';
+    document.getElementById('pdf-drop-zone').style.display = 'block';
+    toast('Error: ' + err.message, 'err');
+    console.error('[PDF Error]', err);
+  }
+}
+
+function renderPdfPreview(parsed) {
+  const { deliveryNo, date, items } = parsed;
+  pdfEgresosPending = [];
+
+  let html = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="pdf-field">
+        <label>Delivery # (Receipt)</label>
+        <input type="text" id="pdf-delivery-no" value="${deliveryNo || ''}">
+      </div>
+      <div class="pdf-field">
+        <label>Fecha</label>
+        <input type="date" id="pdf-date" value="${date || new Date().toISOString().slice(0,10)}">
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:1px;margin-bottom:8px">ITEMS DETECTADOS — ${items.length} línea(s)</div>
+  `;
+
+  items.forEach((item, i) => {
+    // Try to find matching product in DB
+    const model = (item.productModel || '').trim();
+    const match = DB.find(p =>
+      p.code.toLowerCase() === model.toLowerCase() ||
+      p.mpn.toLowerCase() === model.toLowerCase() ||
+      p.code.toLowerCase().includes(model.toLowerCase()) ||
+      model.toLowerCase().includes(p.code.toLowerCase())
+    );
+
+    const isMatched = !!match;
+    pdfEgresosPending.push({ model, qty: item.totalQty, match });
+
+    const qtyClass = match
+      ? (match.qty === 0 ? 'qty-zero' : match.qty <= match.minStock ? 'qty-low' : 'qty-ok')
+      : '';
+
+    const stockInfo = match
+      ? `<span class="${qtyClass}" style="font-weight:700">Stock actual: ${match.qty}</span>`
+      : `<span style="color:var(--accent4)">⚠ No encontrado en DB</span>`;
+
+    // Build DB select for unmatched
+    const dbOptions = DB.slice().sort((a,b) => a.code.localeCompare(b.code))
+      .map(p => `<option value="${p.code}" ${match && p.code === match.code ? 'selected' : ''}>${p.code} — ${p.mpn}</option>`)
+      .join('');
+
+    html += `
+      <div class="pdf-item-row ${isMatched ? 'matched' : 'unmatched'}">
+        <div class="pdf-item-header">
+          <span class="pdf-match-badge ${isMatched ? 'ok' : 'warn'}">${isMatched ? '✓ MATCH' : '⚠ SIN MATCH'}</span>
+          <span style="color:var(--accent);font-weight:700">${model}</span>
+          ${stockInfo}
+        </div>
+        <div class="pdf-item-fields">
+          <div class="pdf-field">
+            <label>Producto en DB</label>
+            <select id="pdf-code-${i}" onchange="pdfUpdateMatch(${i}, this.value)">
+              <option value="">— Seleccionar —</option>
+              ${dbOptions}
+            </select>
+          </div>
+          <div class="pdf-field">
+            <label>Cantidad a egresar</label>
+            <input type="number" id="pdf-qty-${i}" value="${item.totalQty || 0}" min="0">
+          </div>
+        </div>
+      </div>`;
+  });
+
+  document.getElementById('pdf-items-list').innerHTML = html;
+  document.getElementById('pdf-preview').style.display = 'block';
+}
+
+function pdfUpdateMatch(idx, code) {
+  const p = DB.find(x => x.code === code);
+  pdfEgresosPending[idx].match = p || null;
+}
+
+function cancelPdfPreview() {
+  pdfEgresosPending = [];
+  document.getElementById('pdf-preview').style.display = 'none';
+  document.getElementById('pdf-drop-zone').style.display = 'block';
+}
+
+async function confirmPdfEgresos() {
+  const deliveryNo = document.getElementById('pdf-delivery-no').value.trim();
+  const date = document.getElementById('pdf-date').value;
+
+  if (!deliveryNo) { toast('Ingresa el Delivery #', 'err'); return; }
+  if (!date) { toast('La fecha es requerida', 'err'); return; }
+
+  let processed = 0;
+  let errors = [];
+
+  pdfEgresosPending.forEach((item, i) => {
+    const qty = parseInt(document.getElementById(`pdf-qty-${i}`).value) || 0;
+    const selectedCode = document.getElementById(`pdf-code-${i}`).value;
+    const p = DB.find(x => x.code === selectedCode) || item.match;
+
+    if (!p) { errors.push(`Línea ${i+1}: sin producto seleccionado`); return; }
+    if (qty <= 0) { errors.push(`${p.code}: cantidad inválida`); return; }
+    if (qty > p.qty) { errors.push(`${p.code}: stock insuficiente (actual: ${p.qty}, pedido: ${qty})`); return; }
+
+    const oldQty = p.qty;
+    p.qty -= qty;
+
+    history.unshift({
+      type: 'egreso',
+      code: p.code, mpn: p.mpn, description: p.description,
+      qty, before: oldQty, after: p.qty,
+      orderNumber: '',
+      receiptNo: deliveryNo,
+      date: date,
+      time: new Date()
+    });
+
+    processed++;
+  });
+
+  if (errors.length) {
+    toast('Errores: ' + errors.join(' | '), 'err');
+    return;
+  }
+
+  saveDB();
+  saveHistory();
+  updateAlerts();
+  renderConsulta();
+  renderQuickHist();
+
+  document.getElementById('pdf-preview').style.display = 'none';
+  document.getElementById('pdf-drop-zone').style.display = 'block';
+  pdfEgresosPending = [];
+
+  toast(`⬇ ${processed} egreso(s) registrado(s) desde Receipt ${deliveryNo}`, 'ok');
+
+  // Switch to historial to see the result
+  setTimeout(() => showTab('historial'), 1200);
+}
+
+init();
+</script>
+</body>
+</html>
